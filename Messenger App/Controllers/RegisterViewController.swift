@@ -7,32 +7,63 @@
 
 import UIKit
 import FirebaseAuth
+import Firebase
 
 class RegisterViewController: UIViewController {
     
+    @IBOutlet weak var PasswordTextField: UITextField!
+    @IBOutlet weak var EmailTextField: UITextField!
+    @IBOutlet weak var LNameTextField: UITextField!
+    @IBOutlet weak var FNameTextField: UITextField!
     @IBOutlet weak var ProfileImage: UIButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
         ProfileImage.layer.cornerRadius = ProfileImage.frame.size.width/2
         ProfileImage.clipsToBounds = true
-        
-        
-        // Firebase Login / check to see if email is taken
-        // try to create an account
-        FirebaseAuth.Auth.auth().createUser(withEmail: "b@gmail.com", password: "1234566", completion: { authResult , error  in
-            guard let result = authResult, error == nil else {
-                print("Error creating user")
-                return
-            }
-            let user = result.user
-            print("Created User: \(user)")
-        })
     }
     
     @IBAction func AddProfileImage(_ sender: UIButton) {
         presentPhotoActionSheet()
+    }
+    
+    @IBAction func RegisterButton(_ sender: UIButton) {
+        
+        guard let Email = EmailTextField.text, let Password = PasswordTextField.text, let FirstName = FNameTextField.text, let LastName = LNameTextField.text, !Email.isEmpty, !FirstName.isEmpty, !LastName.isEmpty, !Password.isEmpty, Password.count >= 6 else {
+            alertUserError(message: "Please enter all information.")
+            return
+        }
+        
+        DatabaseManger.shared.userExists(with: Email, completion: { [weak self] exists in
+            
+            guard let strongSelf = self else {
+                return
+            }
+            
+            guard !exists else {
+                self?.alertUserError(message: "User account for that email already exists.")
+                return
+            }
+            
+            FirebaseAuth.Auth.auth().createUser(withEmail: Email, password: Password, completion: { authResult , error  in
+                guard authResult != nil, error == nil else {
+                    print("Error creating user")
+                    return
+                }
+                DatabaseManger.shared.insertUser(with: ChatAppUser (firstName: FirstName,
+                                                                    lastName: LastName,
+                                                                    emailAddress: Email))
+                //let user = result.user
+                print("Created User:")
+                strongSelf.navigationController?.popViewController(animated: true)
+            })
+        })
+    }
+    
+    func alertUserError(message: String){
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Dismiss", style: .cancel, handler: nil))
+        present(alert, animated: true)
     }
 }
 

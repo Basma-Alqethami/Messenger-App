@@ -10,5 +10,7 @@ target 'Messenger App' do
 pod 'Firebase/Core' 
 pod 'Firebase/Auth' 
 pod 'Firebase/Database'
+'MaterialComponents/TextFields'
+
 
 end
