@@ -8,6 +8,8 @@
 import UIKit
 import FirebaseAuth
 import Firebase
+import JGProgressHUD
+
 
 class RegisterViewController: UIViewController {
     
@@ -15,55 +17,96 @@ class RegisterViewController: UIViewController {
     @IBOutlet weak var EmailTextField: UITextField!
     @IBOutlet weak var LNameTextField: UITextField!
     @IBOutlet weak var FNameTextField: UITextField!
-    @IBOutlet weak var ProfileImage: UIButton!
+    private let spinner = JGProgressHUD(style: .dark)
+    @IBOutlet weak var ImageViewProfile: UIImageView!
+    @IBOutlet weak var errorLabel: UILabel!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        ProfileImage.layer.cornerRadius = ProfileImage.frame.size.width/2
-        ProfileImage.clipsToBounds = true
+        
+        ImageViewProfile.layer.cornerRadius = ImageViewProfile.frame.size.width/2
+        ImageViewProfile.clipsToBounds = true
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(RegisterViewController.tappedMe))
+        ImageViewProfile.addGestureRecognizer(tap)
+        ImageViewProfile.isUserInteractionEnabled = true
     }
     
-    @IBAction func AddProfileImage(_ sender: UIButton) {
+    @objc func tappedMe() {
         presentPhotoActionSheet()
     }
     
+    
     @IBAction func RegisterButton(_ sender: UIButton) {
         
-        guard let Email = EmailTextField.text, let Password = PasswordTextField.text, let FirstName = FNameTextField.text, let LastName = LNameTextField.text, !Email.isEmpty, !FirstName.isEmpty, !LastName.isEmpty, !Password.isEmpty, Password.count >= 6 else {
-            alertUserError(message: "Please enter all information.")
+        guard let Email = EmailTextField.text, let Password = PasswordTextField.text, let FirstName = FNameTextField.text, let LastName = LNameTextField.text, !Email.isEmpty, !FirstName.isEmpty, !LastName.isEmpty, !Password.isEmpty else {
+            errorLabel.text = "Please enter all information."
             return
         }
         
+        guard Password.count >= 6 else {
+            errorLabel.text = "The password must be 6 digits or more"
+            return
+        }
+        
+        guard let img = ImageViewProfile.image, img != UIImage(systemName: "person.crop.circle") else {
+            errorLabel.text = "Add an image."
+            return
+        }
+        
+        spinner.show(in: view)
+
         DatabaseManger.shared.userExists(with: Email, completion: { [weak self] exists in
             
             guard let strongSelf = self else {
                 return
             }
             
+            print(exists)
             guard !exists else {
-                self?.alertUserError(message: "User account for that email already exists.")
+                DispatchQueue.main.async {
+                    strongSelf.errorLabel.text = "User account for that email already exists."
+                }
                 return
             }
+            
+            UserDefaults.standard.setValue(Email, forKey: "email")
+            UserDefaults.standard.setValue("\(FirstName) \(LastName)", forKey: "name")
             
             FirebaseAuth.Auth.auth().createUser(withEmail: Email, password: Password, completion: { authResult , error  in
                 guard authResult != nil, error == nil else {
                     print("Error creating user")
                     return
                 }
-                DatabaseManger.shared.insertUser(with: ChatAppUser (firstName: FirstName,
-                                                                    lastName: LastName,
-                                                                    emailAddress: Email))
-                //let user = result.user
+                
+                let User = ChatAppUser (firstName: FirstName, lastName: LastName,emailAddress: Email)
+                DatabaseManger.shared.insertUser(with:User , completion: { success in
+                    if success {
+                        
+                        guard let image = strongSelf.ImageViewProfile.image, let data = image.pngData() else {
+                            return
+                        }
+
+                        let fileName = User.profilePictureUrl
+                        StorageManager.shared.uploadProfilePicture(with: data, fileName: fileName, completion: {result in
+                            switch result {
+                            case .failure(let error):
+                                print("error: \(error)")
+                            case .success(let imgUrl):
+                                UserDefaults.standard.set(imgUrl, forKey: "profile_picture_url")
+                                print("save: \(imgUrl)")
+                            }
+                        })
+                    }
+                })
                 print("Created User:")
-                strongSelf.navigationController?.popViewController(animated: true)
+                DispatchQueue.main.async {
+                    strongSelf.spinner.dismiss()
+                }
+                
+                strongSelf.navigationController?.dismiss(animated: true, completion: nil)
             })
-        })
-    }
-    
-    func alertUserError(message: String){
-        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Dismiss", style: .cancel, handler: nil))
-        present(alert, animated: true)
+            })
     }
 }
 
@@ -111,7 +154,7 @@ extension RegisterViewController: UIImagePickerControllerDelegate, UINavigationC
         guard let selectedImage = info[UIImagePickerController.InfoKey.editedImage] as? UIImage else {
             return
         }
-        self.ProfileImage.setImage(selectedImage, for: .normal)
+        self.ImageViewProfile.image = selectedImage
     }
     
     

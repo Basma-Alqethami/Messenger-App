@@ -7,64 +7,99 @@
 
 import UIKit
 import FirebaseAuth
+import SDWebImage
+
+
 class ProfileViewController: UIViewController {
     
-    @IBOutlet var tableView: UITableView!
-    
-    let data = ["Log Out"]
+    @IBOutlet weak var NameLabel: UILabel!
+    @IBOutlet weak var profileImageView: UIImageView!
+    @IBOutlet weak var EmailLabel: UILabel!
         
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        tableView.delegate = self
-        tableView.dataSource = self
-        
+        profileImageView.layer.cornerRadius = profileImageView.frame.size.width/2
+        profileImageView.clipsToBounds = true
+        profile ()
     }
-}
-extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return data.count
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        validateAuth()
+        profile ()
     }
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.textLabel?.text = data[indexPath.row]
-        cell.textLabel?.textAlignment = .center
-        cell.textLabel?.textColor = .red
-        return cell
+    
+    private func validateAuth(){
+        // current user is set automatically when you log a user in
+        if Auth.auth().currentUser == nil {
+            // present login view controller
+            let vc = storyboard?.instantiateViewController(withIdentifier: "storyboardLogIn") as! LogInViewController
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: false)
+        }
     }
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true) // unhighlight the cell
+
+    func profile () {
         
-        let actionSheet = UIAlertController(title: "", message: "", preferredStyle: .actionSheet)
+        guard let email = UserDefaults.standard.value(forKey: "email") as? String else {
+            print("fffffffffffff")
+             return
+         }
         
+        guard let userName = UserDefaults.standard.value(forKey: "name") as? String else {
+            print("fffffffffffff")
+             return
+         }
+        
+        NameLabel.text = userName
+        EmailLabel.text = "Email: \(email)"
+        
+        print(email)
+         let safeEmail = DatabaseManger.safeEmail(emailAddress: email)
+         let filename = "\(safeEmail)_profile_picture.png"
+        print(filename)
+         let path = "images/\(filename)"
+        print(path)
+
+        
+        
+        StorageManager.shared.downloadURL(for: path, completion: { result in
+            print("AAAAAAAAAA \(result)")
+            switch result {
+            case .success(let url):
+                DispatchQueue.main.async {
+                    self.profileImageView.sd_setImage(with: url, completed: nil)
+                }
+            case .failure(let error):
+                print("Failed to get download url: \(error)")
+            }
+        })
+    }
+    
+    @IBAction func LogoutPress(_ sender: UIButton) {
+        
+        let actionSheet = UIAlertController(title: "Log Out", message: "Are you sure you want to log out", preferredStyle: .actionSheet)
+
         actionSheet.addAction(UIAlertAction(title: "Log Out", style: .destructive, handler: { [weak self] _ in
-            // action that is fired once selected
             
             guard let strongSelf = self else {
                 return
             }
-            
-          
-            
             do {
-                try FirebaseAuth.Auth.auth().signOut()
-                
-                // present login view controller
-                let vc = self?.storyboard?.instantiateViewController(withIdentifier: "storyboardLogIn")
-                let nav = UINavigationController(rootViewController: vc!)
+                try Auth.auth().signOut()
+                let vc = strongSelf.storyboard?.instantiateViewController(withIdentifier: "storyboardLogIn") as! LogInViewController
+                let nav = UINavigationController(rootViewController: vc)
                 nav.modalPresentationStyle = .fullScreen
                 strongSelf.present(nav, animated: true)
             }
             catch {
                 print("failed to logout")
             }
-            
         }))
         
         actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
         present(actionSheet, animated: true)
     }
-    
 }
 
