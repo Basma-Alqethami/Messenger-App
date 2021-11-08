@@ -170,6 +170,10 @@ extension ChatViewController: InputBarAccessoryViewDelegate {
                 if success {
                     print("message sent")
                     self?.isNewConversation = false
+                    self?.messages.append(message)
+                    DispatchQueue.main.async {
+                        self?.messagesCollectionView.reloadData()
+                    }
                 }else{
                     print("failed to send")
                 }
